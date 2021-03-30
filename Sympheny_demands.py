@@ -205,7 +205,6 @@ class SymphenyDemands:
         GisdemandDF['GKAT'] = GisdemandDF['GKAT'].replace([1242,1252,1271,1276,1277,1278],'10 Lager')
         GisdemandDF['GKAT'] = GisdemandDF['GKAT'].replace([1265],'11 Sportbau')
         GisdemandDF['GKAT'] = GisdemandDF['GKAT'].replace([1211],'13 Hotel')
-        GisdemandDF = GisdemandDF.groupby("GKAT").sum()
         #print (GisdemandDF)
         return GisdemandDF
     
@@ -252,21 +251,22 @@ class SymphenyDemands:
         # Fetch the currently loaded layers
         #layers = QgsProject.instance().layerTreeRoot().children()
         # Clear the contents of the comboBox from previous runs
-        self.dlg.comboBox_elec.clear()
         self.dlg.comboBox_heat.clear()
-        self.dlg.comboBox_cool.clear()
         self.dlg.comboBox_dhw.clear()
+        self.dlg.comboBox_cool.clear()
+        self.dlg.comboBox_elec.clear()
 
 
         # Populate the comboBox with names of all the field in the layer
         fieldnames = [None] +  [field.name() for field in actvlayer.fields()]
+        #print (fieldnames)
         # fieldnames = ['X', 'Y', 'EGID', 'Baujahr', 'GKAT', 'Energieträger Qh','Energieträger WW', 
         # 'Heizen', 'Kühlen', 'Warmwasser', 'Qe GIS', 'Qe IBC', 'Gas GIS', 'Gas IBC', 
         # 't CO2 / Gebäude', 'EBF']
-        self.dlg.comboBox_elec.addItems(fieldnames)
         self.dlg.comboBox_heat.addItems(fieldnames)
-        self.dlg.comboBox_cool.addItems(fieldnames)
         self.dlg.comboBox_dhw.addItems(fieldnames)
+        self.dlg.comboBox_cool.addItems(fieldnames)
+        self.dlg.comboBox_elec.addItems(fieldnames)
 
         # show the QT dialog
         self.dlg.show()
@@ -276,7 +276,7 @@ class SymphenyDemands:
 
         # Check that at least 1 combobox is != None
         combox = False
-        for cm in [self.dlg.comboBox_elec, self.dlg.comboBox_heat, self.dlg.comboBox_cool, self.dlg.comboBox_dhw]:
+        for cm in [self.dlg.comboBox_heat, self.dlg.comboBox_dhw, self.dlg.comboBox_cool, self.dlg.comboBox_elec]:
             if fieldnames[cm.currentIndex()] is not None:
                 combox = True
         if not combox:
@@ -284,17 +284,20 @@ class SymphenyDemands:
             result = self.dlg.exec_()
 
         # See if OK was pressed
-        demandict = {'Electricity': 'Qe,norm', 'Heating':'Qh,norm', 'Cooling':'Qk,norm', 'Domestic Hot Water':'Qww,norm'}
+        demandict = {'Heating':'Qh,norm', 'Domestic Hot Water':'Qww,norm', 'Cooling':'Qk,norm', 'Electricity': 'Qe,norm'}
+        GisdemandBuildings = pd.DataFrame()
+        selectedFieldsnam = []
         if result:
-            for cmbx, dm in zip([self.dlg.comboBox_elec, self.dlg.comboBox_heat, self.dlg.comboBox_cool, self.dlg.comboBox_dhw], demandict):
+            for cmbx, dm in zip([self.dlg.comboBox_heat, self.dlg.comboBox_dhw, self.dlg.comboBox_cool, self.dlg.comboBox_elec], demandict):
                 selectedFieldIndex = cmbx.currentIndex()
                 selectedfieldname = fieldnames[selectedFieldIndex]
-                #print (selectedfieldname)
 
                 if selectedfieldname is not None:
+
+                    selectedFieldsnam.append(selectedfieldname) # List of field names to be used in summary Excel table
                     
                     # Create dict for excel
-                    columns = ['GKAT'] + [selectedfieldname]
+                    columns = ['EGID'] + ['GKAT'] + [selectedfieldname] + ['EBF']
                     rows = {c:[] for c in columns}
 
                     output_file = self.dlg.lineOutFolder.text()
@@ -305,15 +308,17 @@ class SymphenyDemands:
                         fields = bi.fields()
                         for f in fields:
                             if f.name() == 'EBF':
-                                pass
                                 #print (f.name(), f)
-                                #rows['EBF'].append(bi['EBF'])
+                                rows['EBF'].append(bi['EBF'])
+                            if f.name() == 'EGID':
+                                #print (f.name(), f)
+                                rows['EGID'].append(bi['EGID'])
                             if f.name() == 'GKAT':
                                 #print (f.name(), f)
                                 flag = True
                                 rows['GKAT'].append(bi['GKAT'])
                             if f.name() == selectedfieldname:
-                                #print (bi[selectedfieldname])
+                                #print (selectedfieldname, bi[selectedfieldname])
                                 try:
                                     value = float(bi[selectedfieldname])
                                 except ValueError as e:
@@ -327,14 +332,17 @@ class SymphenyDemands:
                     # Get demand df with building codes
                     GisdemandDF = pd.DataFrame(rows, columns=columns)
                     GisdemandDF = self.Getbuildingcodes(GisdemandDF)
+                    GisdemandBuildings = pd.concat([GisdemandBuildings, GisdemandDF], axis=1)
+
+                    GisdemandDF = GisdemandDF.groupby("GKAT").sum()
 
                     # READ EXCEL WITH NORMALIZED DEMANDS
-                    Input_file = QgsApplication.qgisSettingsDirPath() + "/" + "python/plugins/sympheny_demands/Normvalues.xlsx"
+                    Input_file = QgsApplication.qgisSettingsDirPath() + "/" + "python/plugins/Sympheny-demand-Qgis-main/Normvalues.xlsx"
                     #QMessageBox.warning(None, "Attributes selection", str(Input_file))
                 
                     # a dictionary is created with each df
                     Qnormaldf = pd.read_excel(Input_file, sheet_name=None)
-
+                    print ("Qnormaldf --->", Qnormaldf)
                     # create df for hourly data
                     #Qhourdf = pd.DataFrame(columns = ['Qh/ww,eff','Qh,eff','Qww,eff','Qk,eff','Qe/m','effQe,eff','Qm,eff'])
 
@@ -351,10 +359,44 @@ class SymphenyDemands:
                     df = resultsum.to_frame()
                     df.index = pd.RangeIndex(start = 1, stop=8761)
 
-                    if writeexcel(df,dm,selectedfieldname, output_file):
-                        self.iface.messageBar().pushMessage(
-                        "Success", "Output file written at " + output_file,
-                        level=Qgis.Success, duration=3)
-                    else:
+                    if not writeexcel(df,dm,selectedfieldname, output_file):
                         QMessageBox.warning(None, "Excel write error", 'An error ocurred while generating the Excel demand profile for {}' .format(dm))
+
+
+
+            # Read surface and write energy intensity per building
+            GisdemandBuildings = GisdemandBuildings.loc[:,~GisdemandBuildings.columns.duplicated(keep='first')]
+
+            # Move column EBF at the end of the dataframe
+            cols_at_end = ['EBF']
+            GisdemandBuildings = GisdemandBuildings[[c for c in GisdemandBuildings if c not in cols_at_end]  +  [c for c in cols_at_end if c in GisdemandBuildings]]
+            GisdemandBuildings = GisdemandBuildings.set_index('EGID')
+            GisdemandBuildings = GisdemandBuildings.sort_values(by=['GKAT'])
+            print ("GisdemandBuildings ------->", GisdemandBuildings)
+
+            GisdemandCats = GisdemandBuildings.groupby("GKAT").sum()
+            GisdemandCatsSum = GisdemandCats.sum().to_frame().T
+            GisdemandCatsSum.index = ["TOTAL"]
+            #print ("GisdemandCatsSum ------->", GisdemandCatsSum)
+
+            for f in selectedFieldsnam:
+                #print ("field name ----", f)
+                GisdemandBuildings[f'Energy Int {f} [kWh/m2]'] = (GisdemandBuildings[f] / GisdemandBuildings["EBF"]).round(1) # For each type of demand
+                GisdemandCats[f'Energy Int {f} [kWh/m2]'] = (GisdemandCats[f] / GisdemandCats["EBF"]).round(1) # For each type of demand
+                GisdemandCatsSum[f'Energy Int {f} [kWh/m2]'] = (GisdemandCatsSum[f] / GisdemandCatsSum["EBF"]).round(1) # For each type of demand
+
+            GisdemandCats = GisdemandCats.append(GisdemandCatsSum)
+
+            # Write Excel of Summary of selected buildings
+            output_file = output_file + "/Summary_SelectedBuildings.xls"
+            with pd.ExcelWriter(output_file) as writer:
+                GisdemandBuildings.to_excel(writer, index= True, header= True, sheet_name='Summary_Selected_Buildings')
+                GisdemandCats.to_excel(writer, index= True, header= True, sheet_name='Summary_Building_Categories')
+                writer.save()
+
+
+            if writer:
+                self.iface.messageBar().pushMessage(
+                "Success", "Excel sheets with demands and a Summary Excel sheet of buildings were written in: " + output_file,
+                level=Qgis.Success, duration=3)
 
