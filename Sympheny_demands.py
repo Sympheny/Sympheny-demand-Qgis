@@ -342,7 +342,7 @@ class SymphenyDemands:
                 
                     # a dictionary is created with each df
                     Qnormaldf = pd.read_excel(Input_file, sheet_name=None)
-                    print ("Qnormaldf --->", Qnormaldf)
+                    #print ("Qnormaldf --->", Qnormaldf)
                     # create df for hourly data
                     #Qhourdf = pd.DataFrame(columns = ['Qh/ww,eff','Qh,eff','Qww,eff','Qk,eff','Qe/m','effQe,eff','Qm,eff'])
 
@@ -372,7 +372,7 @@ class SymphenyDemands:
             GisdemandBuildings = GisdemandBuildings[[c for c in GisdemandBuildings if c not in cols_at_end]  +  [c for c in cols_at_end if c in GisdemandBuildings]]
             GisdemandBuildings = GisdemandBuildings.set_index('EGID')
             GisdemandBuildings = GisdemandBuildings.sort_values(by=['GKAT'])
-            print ("GisdemandBuildings ------->", GisdemandBuildings)
+            #print ("GisdemandBuildings ------->", GisdemandBuildings)
 
             GisdemandCats = GisdemandBuildings.groupby("GKAT").sum()
             GisdemandCatsSum = GisdemandCats.sum().to_frame().T
