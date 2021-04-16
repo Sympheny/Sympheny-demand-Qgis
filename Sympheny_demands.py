@@ -8,7 +8,7 @@
                               -------------------
         begin                : 2020-11-05
         git sha              : $Format:%H$
-        copyright            : (C) 2020 by Urban Sympheny AG
+        copyright            : (C) 2021 by Urban Sympheny AG
         email                : carlos.pacheco@sympheny.com
  ***************************************************************************/
 
@@ -221,6 +221,13 @@ class SymphenyDemands:
         def writeexcel(df, dm, selectedfieldname, output_file):
             #try:
             output_file = output_file + "/Demand_" + dm + "_" + selectedfieldname + "_kWh.xls"
+            #print ("output_file -->", output_file)
+            try:
+                myfile = open(output_file, "r+")
+            except:
+                QMessageBox.warning(None, "Excel file is open", "Please close the results Excel file first")
+                self.dlg.parent().close()
+
             writer = pd.ExcelWriter(output_file)  # pylint: disable=abstract-class-instantiated
             df.to_excel(writer, index= True, header= False, sheet_name='demand')  
             writer.save()
@@ -297,7 +304,7 @@ class SymphenyDemands:
                     selectedFieldsnam.append(selectedfieldname) # List of field names to be used in summary Excel table
                     
                     # Create dict for excel
-                    columns = ['EGID'] + ['GKAT'] + [selectedfieldname] + ['EBF']
+                    columns = ['EGID'] + ['GKAT'] + [selectedfieldname] + ['EBF [m2]']
                     rows = {c:[] for c in columns}
 
                     output_file = self.dlg.lineOutFolder.text()
@@ -309,12 +316,11 @@ class SymphenyDemands:
                         for f in fields:
                             if f.name() == 'EBF':
                                 #print (f.name(), f)
-                                rows['EBF'].append(bi['EBF'])
+                                rows['EBF [m2]'].append(bi['EBF'])
+                                #print (bi["EBF"])
                             if f.name() == 'EGID':
-                                #print (f.name(), f)
                                 rows['EGID'].append(bi['EGID'])
                             if f.name() == 'GKAT':
-                                #print (f.name(), f)
                                 flag = True
                                 rows['GKAT'].append(bi['GKAT'])
                             if f.name() == selectedfieldname:
@@ -325,12 +331,20 @@ class SymphenyDemands:
                                     QMessageBox.warning(None, "Attributes selected", "The attributes selected in some buildings are not numeric. Please check this again by clicking in 'Open Atribute Table'")
                                     self.dlg.parent().close()
                                 rows[str(selectedfieldname)].append(value)
+
+                    listzeros = [0]*len(selected_buildings)
+                    if rows["EBF [m2]"] == []:
+                        rows["EBF [m2]"] = listzeros
+                    if rows["EGID"] == []:
+                        rows["EGID"] = listzeros
+
                     if not flag:
                         QMessageBox.warning(None, "Building Category problem", "It seems that the buildings selected don't have a 'GKAT' attribute with a numeric category assigned.")
                         self.dlg.parent().close()                       
 
                     # Get demand df with building codes
                     GisdemandDF = pd.DataFrame(rows, columns=columns)
+                    #print (GisdemandDF)
                     GisdemandDF = self.Getbuildingcodes(GisdemandDF)
                     GisdemandBuildings = pd.concat([GisdemandBuildings, GisdemandDF], axis=1)
 
@@ -343,6 +357,7 @@ class SymphenyDemands:
                     # a dictionary is created with each df
                     Qnormaldf = pd.read_excel(Input_file, sheet_name=None)
                     #print ("Qnormaldf --->", Qnormaldf)
+                    #print ("TESTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT")
                     # create df for hourly data
                     #Qhourdf = pd.DataFrame(columns = ['Qh/ww,eff','Qh,eff','Qww,eff','Qk,eff','Qe/m','effQe,eff','Qm,eff'])
 
@@ -368,7 +383,7 @@ class SymphenyDemands:
             GisdemandBuildings = GisdemandBuildings.loc[:,~GisdemandBuildings.columns.duplicated(keep='first')]
 
             # Move column EBF at the end of the dataframe
-            cols_at_end = ['EBF']
+            cols_at_end = ['EBF [m2]']
             GisdemandBuildings = GisdemandBuildings[[c for c in GisdemandBuildings if c not in cols_at_end]  +  [c for c in cols_at_end if c in GisdemandBuildings]]
             GisdemandBuildings = GisdemandBuildings.set_index('EGID')
             GisdemandBuildings = GisdemandBuildings.sort_values(by=['GKAT'])
@@ -381,14 +396,19 @@ class SymphenyDemands:
 
             for f in selectedFieldsnam:
                 #print ("field name ----", f)
-                GisdemandBuildings[f'Energy Int {f} [kWh/m2]'] = (GisdemandBuildings[f] / GisdemandBuildings["EBF"]).round(1) # For each type of demand
-                GisdemandCats[f'Energy Int {f} [kWh/m2]'] = (GisdemandCats[f] / GisdemandCats["EBF"]).round(1) # For each type of demand
-                GisdemandCatsSum[f'Energy Int {f} [kWh/m2]'] = (GisdemandCatsSum[f] / GisdemandCatsSum["EBF"]).round(1) # For each type of demand
+                GisdemandBuildings[f'{f} [kWh/m2]'] = (GisdemandBuildings[f] / GisdemandBuildings["EBF [m2]"]).round(1) # For each type of demand
+                GisdemandCats[f'{f} [kWh/m2]'] = (GisdemandCats[f] / GisdemandCats["EBF [m2]"]).round(1) # For each type of demand
+                GisdemandCatsSum[f'{f} [kWh/m2]'] = (GisdemandCatsSum[f] / GisdemandCatsSum["EBF [m2]"]).round(1) # For each type of demand
 
             GisdemandCats = GisdemandCats.append(GisdemandCatsSum)
 
             # Write Excel of Summary of selected buildings
             output_file = output_file + "/Summary_SelectedBuildings.xls"
+            try:
+                myfile = open(output_file, "r+")
+            except:
+                QMessageBox.warning(None, "Excel file is open", "Please close the summary Excel file first")
+                self.dlg.parent().close()
             with pd.ExcelWriter(output_file) as writer:
                 GisdemandBuildings.to_excel(writer, index= True, header= True, sheet_name='Summary_Selected_Buildings')
                 GisdemandCats.to_excel(writer, index= True, header= True, sheet_name='Summary_Building_Categories')
