@@ -223,7 +223,9 @@ class SymphenyDemands:
             output_file = output_file + "/Demand_" + dm + "_" + selectedfieldname + "_kWh.xls"
             #print ("output_file -->", output_file)
             try:
-                myfile = open(output_file, "r+")
+                if os.path.isfile(output_file):
+                    myfile = open(output_file, "r+")
+                    myfile.close()
             except:
                 QMessageBox.warning(None, "Excel file is open", "Please close the results Excel file first")
                 self.dlg.parent().close()
@@ -231,6 +233,7 @@ class SymphenyDemands:
             writer = pd.ExcelWriter(output_file)  # pylint: disable=abstract-class-instantiated
             df.to_excel(writer, index= True, header= False, sheet_name='demand')  
             writer.save()
+            writer.close()
             return True
             #except:
             #return False
@@ -264,8 +267,8 @@ class SymphenyDemands:
         self.dlg.comboBox_elec.clear()
 
 
-        # Populate the comboBox with names of all the field in the layer
-        fieldnames = [None] +  [field.name() for field in actvlayer.fields()]
+        # Populate the comboBox with names of all the fields in the layer
+        fieldnames = [None] +  [field.name() for field in actvlayer.fields() if field.name() != "GKAT" and field.name() != "EGID" and field.name() != "EBF"]
         #print (fieldnames)
         # fieldnames = ['X', 'Y', 'EGID', 'Baujahr', 'GKAT', 'Energieträger Qh','Energieträger WW', 
         # 'Heizen', 'Kühlen', 'Warmwasser', 'Qe GIS', 'Qe IBC', 'Gas GIS', 'Gas IBC', 
@@ -405,7 +408,9 @@ class SymphenyDemands:
             # Write Excel of Summary of selected buildings
             output_file = output_file + "/Summary_SelectedBuildings.xls"
             try:
-                myfile = open(output_file, "r+")
+                if os.path.isfile(output_file):
+                    myfile = open(output_file, "r+")
+                    myfile.close()
             except:
                 QMessageBox.warning(None, "Excel file is open", "Please close the summary Excel file first")
                 self.dlg.parent().close()
